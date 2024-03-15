@@ -4,141 +4,87 @@ import AuthPageInput from '../../components/AuthPageInput/AuthPageInput';
 import RightTopButton from "../../components/RightTopButton/RightTopButton";
 import { useInput } from "../../hooks/useInput";
 import axios from "axios";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { signupRequest } from "../../apis/api/signup";
 
 function SignupPage() {
     const navigate = useNavigate();
-    const [ username, setUsername, userNameChange ] = useInput();
-    const [ password, setPassword, passwordChange ] = useInput();
-    const [ checkPassword, setCheckPassword, checkPasswordChange ] = useInput();
-    const [ name, setName, nameChange ] = useInput();
-    const [ email, setEmail, emailChange ] = useInput();
 
-    const [ messageGroup, setMessageGroup ] = useState({
-        username: null,
-        password: null,
-        checkPassword: null,
-        name: null,
-        email: null
-    });
+    const [ username, userNameChange, usernameMessage, setUssernameValue, setUsernameMessage ] = useInput("username");
+    const [ password, passwordChange, passwordMessage  ] = useInput("password");
+    const [ checkPassword, checkPasswordChange ] = useInput("chekPassword");
+    const [ name, nameChange, nameMessage ] = useInput("name");
+    const [ email, emailChange, emailMessage ] = useInput("email");
+    const [ checkPasswordMessage, setCheckPasswordMessage ] = useState(null);
 
-    const handleCheckPassword = (e) => {
-        if(!!e.target.value) {
-            setMessageGroup(messageGroup => {
-                return{
-                    ...messageGroup,
-                    checkPassword: {
-                        type: checkPassword === password ? "success" : "error",
-                        text: checkPassword === password ? "" : "비밀번호가 서로 일치하지 않습니다"
-                    }
-                }
-            })
-        } else {
-            setMessageGroup(messageGroup => {
-                return {
-                    ...messageGroup,
-                    checkPassword: null
-                }
-            })
+
+    useEffect(() => {
+        if( !checkPassword || !password ) {
+            setCheckPasswordMessage(() => null);
+            return;
         }
-    }
-   
+        if(checkPassword === password) {
+            setCheckPasswordMessage(() => {
+                return{
+                    type: "success",
+                    text: ""
+                }
+            })
+        }else {
+            setCheckPasswordMessage(() => {
+                return{
+                    type: "error",
+                    text: "비밀번호가 일치하지 않습니다"
+                }
+            })
+
+        }
+
+    }, [checkPassword]);
 
     const handleSignupSubmit = () => {
-
-        if(messageGroup?.checkPassword?.type === "error") {
-            alert("가입 할 회원의 정보를 다시 확인하세요.");
-            return; //이조건이 충족이 되어야지만 아래 실행
+        const chekFlags = [
+            usernameMessage?.type,
+            passwordMessage?.type,
+            checkPasswordMessage?.type,
+            nameMessage?.type,
+            emailMessage?.type
+        ];
+        if(chekFlags.includes("error") || chekFlags.includes(undefined) || chekFlags.includes(null)) {
+            alert("가입 정보를 다시 확인하세요.");
+            return;
         }
-
-        if(!checkPassword){
-            setMessageGroup(messageGroup => {
-                return {
-                    ...messageGroup,
-                    checkPassword: {
-                        type : "error",
-                        text : "비밀번호를 입력하세요"
-                    }
-                }
-            })
-        }
-
-        const signupData = {
+        
+        signupRequest({
             username,
             password,
-            checkPassword,
             name,
             email
-        }
-
-        signupRequest(signupData);
-    }
-
-    const signupRequest = async (signupData) => {
-        try {
-            const response = await axios.post("http://localhost:8080/auth/signup", signupData); //1(주소)에다 2(데이터)날릴거다 json은 알아서 axios이 해준다
-            // 3000 클라이언트 (프론트 ) 주소
-            // 8080 백 주소
-            if(response.data) {
+        }).then(response => {
+            console.log(response);
+            if(response.status === 201) {
                 navigate("/auth/signin");
-            };
-
-        } catch(error) {//요청에대한 응답이 에러면 catch로 온다
-
-            const errorMap = error.response.data;
-            const entries = Object.entries(errorMap);
-            let newMessageGroup ={
-                username: {
-                    type: "success",
-                    text: "사용할 수 있는 사용자이름 입니다"
-                },
-                password: {
-                    type: "success",
-                    text: ""
-                },
-                checkPassword: {
-                    type: "success",
-                    text: ""
-                },
-                name: {
-                    type: "success",
-                    text: ""
-                },
-                email: {
-                    type: "success",
-                    text: ""
-                }
-            };
-
-            
-
-            for(let [ key, value ] of entries ) {
-                newMessageGroup ={
-                    ...newMessageGroup,
-                    [key]: {
-                        type: "error",
-                        text: value
+            } 
+        }).catch(error => {
+            if (error.response.status === 400 ) {
+                const errorMap = error.response.data;
+                const errorEntries = Object.entries(errorMap);
+                for(let [ k, v ]of errorEntries) {
+                    if( k === "username") {
+                        setUsernameMessage(() => {
+                            return{
+                                type: "error",
+                                text: v
+                            }
+                        })
                     }
-                    
                 }
+            }else {
+                alert("회원가입 오류");
             }
-            if(newMessageGroup.password.type === "error") {
-                newMessageGroup = {
-                    ...newMessageGroup,
-                    checkPassword: null
-                }
-                setPassword(() => "");
-                setCheckPassword(() => "");
-            }   
-            setMessageGroup(() => newMessageGroup);
-        }
-            
-    }
-
-    
-        
-
+        })
+    };
 
     return (
         <>
@@ -147,11 +93,11 @@ function SignupPage() {
                 <RightTopButton onClick={handleSignupSubmit}>가입하기</RightTopButton>
             </div>
             
-            <AuthPageInput type={"text"} name={"username"} placeholder={"사용자이름"} value={username} onChange={userNameChange} message={messageGroup.username}/>
-            <AuthPageInput type={"password"} name={"password"} placeholder={"비밀번호"} value={password} onChange={passwordChange} message={messageGroup.password}/>
-            <AuthPageInput type={"password"} name={"checkPassword"} placeholder={"비밀번호 확인"} value={checkPassword} onChange={checkPasswordChange} onBlur={handleCheckPassword}message={messageGroup.checkPassword}/>
-            <AuthPageInput type={"text"} name={"name"} placeholder={"성명"} value={name} onChange={nameChange} message={messageGroup.name}/>
-            <AuthPageInput type={"text"} name={"email"} placeholder={"이메일"} value={email} onChange={emailChange} message={messageGroup.email}/>
+            <AuthPageInput type={"text"} name={"username"} placeholder={"사용자이름"} value={username} onChange={userNameChange} message={usernameMessage}/>
+            <AuthPageInput type={"password"} name={"password"} placeholder={"비밀번호"} value={password} onChange={passwordChange} message={passwordMessage}/>
+            <AuthPageInput type={"password"} name={"checkPassword"} placeholder={"비밀번호 확인"} value={checkPassword} onChange={checkPasswordChange} message={checkPasswordMessage}/>
+            <AuthPageInput type={"text"} name={"name"} placeholder={"성명"} value={name} onChange={nameChange} message={nameMessage}/>
+            <AuthPageInput type={"text"} name={"email"} placeholder={"이메일"} value={email} onChange={emailChange} message={emailMessage}/>
             
 
         </>
